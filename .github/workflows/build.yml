@@ -69,15 +69,14 @@ jobs:
           }
           
       - name: Build Windows executable
+        shell: cmd
         run: |
           echo "Current directory:"
-          pwd
-          echo "Directory contents:"
           dir
           echo "Building with PyInstaller..."
           python -m PyInstaller --name="Sound to XML Converter" ^
-            --windowed ^
-            --icon=assets/icon.ico ^
+            --noconsole ^
+            --icon=assets\icon.ico ^
             --add-data="assets;assets" ^
             --add-data="ffmpeg;ffmpeg" ^
             --hidden-import=pydub ^
