@@ -58,80 +58,10 @@ jobs:
         run: |
           & 'C:\Program Files (x86)\NSIS\makensis.exe' installer.nsi
           
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: "Sound to XML Installer.exe"
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-          pip install torch
-          pip install pydub openai-whisper numpy soundfile
-          brew install ffmpeg
-          brew install create-dmg
-          
-      - name: Build macOS app
-        run: |
-          echo "Current directory:"
-          pwd
-          echo "Directory contents:"
-          ls -la
-          echo "Building app..."
-          python -m PyInstaller Sound_to_XML.spec --debug all
-        
-      - name: List directory contents
-        run: |
-          echo "Dist directory:"
-          ls -la dist
-          echo "Build directory:"
-          ls -la build
-          
-      - name: Create DMG
-        run: |
-          create-dmg \
-            --volname "Sound to XML Converter" \
-            --window-pos 200 120 \
-            --window-size 800 400 \
-            --icon-size 100 \
-            --icon "Sound to XML Converter.app" 200 190 \
-            --hide-extension "Sound to XML Converter.app" \
-            --app-drop-link 600 185 \
-            "Sound to XML Converter.dmg" \
-            "dist/Sound to XML Converter.app"
-            
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-dmg
-          path: "Sound to XML Converter.dmg"
-
-  create-release:
-    needs: [build-windows, build-macos]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        
       - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            windows-installer/Sound to XML Installer.exe
-            macos-dmg/Sound to XML Converter.dmg
+          files: "Sound to XML Installer.exe"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
