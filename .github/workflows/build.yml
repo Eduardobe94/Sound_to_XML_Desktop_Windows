@@ -26,20 +26,17 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install pydub openai-whisper numpy soundfile
           
       - name: Download FFmpeg
+        shell: pwsh
         run: |
           Remove-Item -Path ffmpeg -Recurse -Force -ErrorAction SilentlyContinue
           mkdir ffmpeg
           echo "Downloading FFmpeg..."
           Invoke-WebRequest https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip -OutFile ffmpeg.zip
-          echo "Extracting FFmpeg..."
           Expand-Archive ffmpeg.zip -DestinationPath .
-          echo "Moving FFmpeg files..."
           Move-Item -Force ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe ffmpeg\
           Move-Item -Force ffmpeg-master-latest-win64-gpl\bin\ffprobe.exe ffmpeg\
-          echo "Cleaning up..."
           Remove-Item -Path ffmpeg.zip -Force
           Remove-Item -Path ffmpeg-master-latest-win64-gpl -Recurse -Force
           
@@ -48,57 +45,15 @@ jobs:
         run: |
           echo "Downloading NSIS..."
           curl.exe -L "https://netcologne.dl.sourceforge.net/project/nsis/NSIS%203/3.08/nsis-3.08-setup.exe" -o nsis-setup.exe
-          
-          if (!(Test-Path "nsis-setup.exe")) {
-            echo "Download failed, trying alternative URL..."
-            curl.exe -L "https://github.com/NSIS-Dev/nsis/releases/download/v3.08/nsis-3.08-setup.exe" -o nsis-setup.exe
-          }
-          
-          echo "Verifying download..."
           if (Test-Path "nsis-setup.exe") {
             echo "Installing NSIS..."
             Start-Process -FilePath .\nsis-setup.exe -ArgumentList '/S' -Wait -NoNewWindow
-            echo "Waiting for installation..."
             Start-Sleep -s 15
-            
-            echo "Verifying installation..."
-            if (Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe') {
-              echo "NSIS installed successfully"
-            } else {
-              throw "NSIS installation failed"
-            }
-          } else {
-            throw "Failed to download NSIS"
           }
           
       - name: Build Windows executable
         shell: cmd
-        run: |
-          echo "Current directory:"
-          dir
-          echo "Building with PyInstaller..."
-          python -m PyInstaller --name="Sound to XML Converter" ^
-            --noconsole ^
-            --icon=assets\icon.ico ^
-            --add-data="assets;assets" ^
-            --add-data="ffmpeg;ffmpeg" ^
-            --hidden-import=pydub ^
-            --hidden-import=openai-whisper ^
-            --hidden-import=numpy ^
-            --hidden-import=soundfile ^
-            --hidden-import=PyQt6 ^
-            main_gui.py
-        
-      - name: List directory contents
-        run: |
-          echo "Dist directory:"
-          dir "dist"
-          echo "Application directory:"
-          dir "dist\Sound to XML Converter"
-          
-      - name: Create installer
-        run: |
-          & 'C:\Program Files (x86)\NSIS\makensis.exe' installer.nsi
+        run: build_windows.bat
           
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -109,8 +64,6 @@ jobs:
           body: "Release version ${{ github.ref_name }}"
           draft: false
           prerelease: false
-          files: |
-            dist/*.exe
-            "Sound to XML Installer.exe"
+          files: "Sound to XML Installer.exe"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
