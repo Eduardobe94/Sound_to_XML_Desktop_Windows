@@ -8,13 +8,19 @@ mkdir dist 2>nul
 mkdir dist\assets 2>nul
 mkdir dist\ffmpeg 2>nul
 
+echo Instalando dependencias...
+pip install --upgrade pip
+pip install PyQt6==6.4.0
+pip install PyQt6-sip==13.4.0
+pip install PyQt6-Qt6==6.4.0
+
 echo Verificando archivos necesarios...
 if not exist "assets\icon.ico" (
-    echo Error: No se encuentra assets\icon.ico
+    echo Error: Falta icon.ico
     exit /b 1
 )
 if not exist "ffmpeg\ffmpeg.exe" (
-    echo Error: No se encuentra ffmpeg\ffmpeg.exe
+    echo Error: Falta ffmpeg.exe
     exit /b 1
 )
 if not exist "main_gui.py" (
@@ -32,11 +38,16 @@ python -m PyInstaller --clean ^
     --icon="assets\icon.ico" ^
     --add-data="assets;assets" ^
     --add-data="ffmpeg;ffmpeg" ^
+    --hidden-import=PyQt6 ^
+    --hidden-import=PyQt6.QtCore ^
+    --hidden-import=PyQt6.QtGui ^
+    --hidden-import=PyQt6.QtWidgets ^
+    --hidden-import=PyQt6.sip ^
     --hidden-import=pydub ^
     --hidden-import=openai-whisper ^
     --hidden-import=numpy ^
     --hidden-import=soundfile ^
-    --hidden-import=PyQt6 ^
+    --collect-all PyQt6 ^
     --name="Sound to XML Converter" ^
     main_gui.py
 
