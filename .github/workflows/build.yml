@@ -39,7 +39,12 @@ jobs:
           
       - name: Build Windows executable
         run: |
-          pyinstaller --noconsole --icon=assets/icon.ico --add-data "assets;assets" --add-data "ffmpeg;ffmpeg" --name "Sound to XML Converter" Sound_to_XML.spec
+          python -m PyInstaller --debug --noconsole --icon=assets/icon.ico --add-data "assets;assets" --add-data "ffmpeg;ffmpeg" --name "Sound to XML Converter" Sound_to_XML.spec
+        
+      - name: List directory contents
+        run: |
+          dir dist
+          dir "dist\Sound to XML Converter"
           
       - name: Create installer
         run: |
@@ -71,8 +76,14 @@ jobs:
           
       - name: Build macOS app
         run: |
+          set -x  # Habilitar modo debug
           chmod +x build_macos.sh
           ./build_macos.sh
+        
+      - name: List directory contents
+        run: |
+          ls -la dist
+          ls -la "dist/Sound to XML Converter.app"
           
       - name: Create DMG
         run: |
