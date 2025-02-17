@@ -12,6 +12,9 @@ from pydub.silence import split_on_silence
 import whisper
 from openai import OpenAI, AsyncOpenAI
 from rapidfuzz import fuzz, process
+from pathlib import Path
+import sys
+import platform
 
 # Configuración básica del logging (puedes ajustarlo según necesites)
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -106,7 +109,12 @@ class MoodboardSimple:
     _patron_normalizar = re.compile(r'[^\w\s]')
 
     def __init__(self, audio_folder=None, whisper_model=None):
-        self.CARPETA_AUDIOS = audio_folder or "audiosrt"
+        # Usar la carpeta proporcionada o la carpeta Documentos del usuario como respaldo
+        self.CARPETA_AUDIOS = audio_folder if audio_folder else os.path.expanduser("~/Documents/Sound to XML Output")
+        
+        # Asegurar que la carpeta existe
+        os.makedirs(self.CARPETA_AUDIOS, exist_ok=True)
+        
         self.project_folder = self._create_project_folder()
         self.ensure_folders_exist()
         self.proyecto = ProyectoEdicion()
@@ -120,6 +128,14 @@ class MoodboardSimple:
         self.async_client = AsyncOpenAI(
             api_key=os.getenv("OPENAI_API_KEY")
         )
+        
+        # Configurar FFmpeg - Usar los binarios del sistema directamente
+        AudioSegment.converter = shutil.which('ffmpeg')
+        AudioSegment.ffmpeg = shutil.which('ffmpeg')
+        AudioSegment.ffprobe = shutil.which('ffprobe')
+        
+        if not all([AudioSegment.converter, AudioSegment.ffmpeg, AudioSegment.ffprobe]):
+            raise FileNotFoundError("FFmpeg y FFprobe deben estar instalados en el sistema. Instálalos con 'brew install ffmpeg'")
     
     def _create_project_folder(self):
         """Genera un nombre único para la carpeta del proyecto basado en la fecha."""
@@ -133,19 +149,25 @@ class MoodboardSimple:
             i += 1
     
     def ensure_folders_exist(self):
-        """Crea las carpetas necesarias para el proyecto."""
-        os.makedirs(self.CARPETA_AUDIOS, exist_ok=True)
-        project_path = os.path.join(self.CARPETA_AUDIOS, self.project_folder)
-        os.makedirs(project_path, exist_ok=True)
-        os.makedirs(os.path.join(project_path, "premiere", "assets"), exist_ok=True)
-        os.makedirs(os.path.join(project_path, "analysis"), exist_ok=True)
-        
-        self.xml_path = os.path.join(project_path, "premiere", f"{self.project_folder}.xml")
-        self.srt_path = os.path.join(project_path, "premiere", f"{self.project_folder}.srt")
-        self.analysis_path = os.path.join(project_path, "analysis", "whisper_output.txt")
-        self.gpt_analysis_path = os.path.join(project_path, "analysis", "gpt_analysis.txt")
-        self.words_srt_path = os.path.join(project_path, "analysis", "words_timing.srt")
-        self.assets_path = os.path.join(project_path, "premiere", "assets")
+        """Asegura que existan las carpetas necesarias."""
+        try:
+            project_path = os.path.join(self.CARPETA_AUDIOS, self.project_folder)
+            os.makedirs(project_path, exist_ok=True)
+            os.makedirs(os.path.join(project_path, "xml"), exist_ok=True)
+            os.makedirs(os.path.join(project_path, "srt"), exist_ok=True)
+            os.makedirs(os.path.join(project_path, "analysis"), exist_ok=True)
+            os.makedirs(os.path.join(project_path, "assets"), exist_ok=True)
+            
+            # Inicializar todas las rutas necesarias
+            self.xml_path = os.path.join(project_path, "xml", f"{self.project_folder}.xml")
+            self.srt_path = os.path.join(project_path, "srt", f"{self.project_folder}.srt")
+            self.analysis_path = os.path.join(project_path, "analysis", "whisper_output.txt")
+            self.gpt_analysis_path = os.path.join(project_path, "analysis", "gpt_analysis.txt")
+            self.words_srt_path = os.path.join(project_path, "analysis", "words_timing.srt")
+            self.assets_path = os.path.join(project_path, "assets")
+            
+        except Exception as e:
+            raise Exception(f"Error al crear las carpetas: {str(e)}")
     
     def print_status(self, message, emoji="ℹ️"):
         """Muestra mensajes de estado (se puede reemplazar por logging)."""
@@ -167,10 +189,39 @@ class MoodboardSimple:
     def transcribir_audio(self, audio_path):
         """Transcribe el audio usando Whisper y guarda la transcripción con timestamps."""
         self.print_status("Transcribiendo audio con timestamps de palabras...", "🎙")
-        self.transcripcion = self.model.transcribe(audio_path, word_timestamps=True)
-        with open(self.analysis_path, 'w', encoding='utf-8') as f:
-            json.dump(self.transcripcion, f, ensure_ascii=False, indent=2)
-        self.generar_srt_palabras()
+        try:
+            # Configurar FFmpeg y ambiente
+            os.environ["FFMPEG_BINARY"] = shutil.which('ffmpeg')
+            os.environ["FFPROBE_BINARY"] = shutil.which('ffprobe')
+            os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+            
+            # Configurar ambiente para evitar ventanas
+            os.environ["SDL_AUDIODRIVER"] = "dummy"
+            os.environ["AUDIODEV"] = "null"
+            os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+            
+            # Cargar el audio sin reproducirlo
+            import torch
+            torch.set_num_threads(1)
+            
+            # Configurar Whisper con solo los parámetros soportados
+            self.transcripcion = self.model.transcribe(
+                audio_path,
+                word_timestamps=True,
+                condition_on_previous_text=False,
+                verbose=False,
+                temperature=0,
+                language='es',
+                fp16=False
+            )
+            
+            # Guardar la transcripción
+            with open(self.analysis_path, 'w', encoding='utf-8') as f:
+                json.dump(self.transcripcion, f, ensure_ascii=False, indent=2)
+            
+            self.generar_srt_palabras()
+        except Exception as e:
+            raise Exception(f"Error en la transcripción: {str(e)}")
     
     def generar_srt_palabras(self):
         """Genera un SRT que detalla el tiempo exacto de cada palabra."""
@@ -190,30 +241,45 @@ class MoodboardSimple:
         self.print_status(f"SRT de palabras generado: {self.words_srt_path}", "✅")
     
     def copiar_audio(self, audio_path):
-        """Copia el audio a la carpeta de assets con un nombre único."""
+        """Copia el archivo de audio a la carpeta de assets."""
         self.print_status("Copiando archivo de audio a assets...", "📁")
-        extension = os.path.splitext(audio_path)[1]
-        self.audio_filename = f"audio_{self.project_folder}{extension}"
-        self.audio_dest = os.path.join(self.assets_path, self.audio_filename)
-        shutil.copy2(audio_path, self.audio_dest)
-        return self.audio_dest
+        nombre_archivo = os.path.basename(audio_path)
+        destino = os.path.join(self.assets_path, nombre_archivo)
+        shutil.copy2(audio_path, destino)
+        return destino
     
     def eliminar_silencios(self, audio_path):
         """Elimina silencios del audio usando pydub."""
         self.print_status("Eliminando silencios del audio...", "🔇")
-        audio = AudioSegment.from_file(audio_path)
-        min_silence_len = 500  # ms
-        silence_thresh = -40   # dB
-        keep_silence = 100     # ms a mantener
-        chunks = split_on_silence(audio, min_silence_len=min_silence_len,
+        try:
+            # Configurar para que no abra el archivo automáticamente
+            AudioSegment.converter = shutil.which('ffmpeg')
+            AudioSegment.ffmpeg = shutil.which('ffmpeg')
+            AudioSegment.ffprobe = shutil.which('ffprobe')
+            
+            audio = AudioSegment.from_file(audio_path)
+            min_silence_len = 500  # ms
+            silence_thresh = -40   # dB
+            keep_silence = 100     # ms a mantener
+            chunks = split_on_silence(audio, 
+                                    min_silence_len=min_silence_len,
                                     silence_thresh=silence_thresh,
                                     keep_silence=keep_silence)
-        audio_sin_silencios = sum(chunks)
-        nombre_base, extension = os.path.splitext(audio_path)
-        audio_procesado = f"{nombre_base}_sin_silencios{extension}"
-        audio_sin_silencios.export(audio_procesado, format=extension.lstrip('.'))
-        self.print_status(f"Audio procesado guardado en: {audio_procesado}", "✅")
-        return audio_procesado
+            audio_sin_silencios = sum(chunks)
+            nombre_base, extension = os.path.splitext(audio_path)
+            audio_procesado = f"{nombre_base}_sin_silencios{extension}"
+            
+            # Exportar sin reproducir
+            audio_sin_silencios.export(
+                audio_procesado, 
+                format=extension.lstrip('.'),
+                parameters=["-nostdin"]  # Evitar interacción con stdin
+            )
+            
+            self.print_status(f"Audio procesado guardado en: {audio_procesado}", "✅")
+            return audio_procesado
+        except Exception as e:
+            raise Exception(f"Error al eliminar silencios: {str(e)}")
     
     def _contar_tokens(self, texto: str) -> int:
         """Estimación aproximada de tokens (4 caracteres = 1 token)."""
@@ -432,7 +498,7 @@ Devuelve solo JSON válido siguiendo esta plantilla:
 
     async def segmentar_con_gpt(self):
         """Versión actualizada que usa el análisis previo del guion para mejorar la segmentación."""
-        self.print_status("Analizando transcripción con GPT-4...", "🤖")
+        self.print_status("Analizando transcripción con GPT-4...", "��")
         
         # Obtener el texto completo sin tiempos
         palabras_completas = [
@@ -1034,6 +1100,24 @@ Devuelve solo JSON válido con el siguiente formato:
             if 'audio_sin_silencios' in locals() and os.path.exists(audio_sin_silencios):
                 os.remove(audio_sin_silencios)
         return self.xml_path, self.srt_path
+
+    def get_ffmpeg_path(self):
+        """Obtiene la ruta correcta para FFmpeg según el entorno."""
+        if platform.system() == 'Darwin':
+            # En macOS, usar los binarios del sistema
+            ffmpeg_path = '/opt/homebrew/bin/ffmpeg'
+            ffprobe_path = '/opt/homebrew/bin/ffprobe'
+            
+            # Verificar que existen
+            if os.path.exists(ffmpeg_path) and os.path.exists(ffprobe_path):
+                print(f"Using system FFmpeg at: {ffmpeg_path}")
+                return ffmpeg_path, ffprobe_path
+            else:
+                # Si no están en la ruta esperada, intentar encontrarlos en el PATH
+                return 'ffmpeg', 'ffprobe'
+        else:
+            # Para Windows u otros sistemas
+            return 'ffmpeg', 'ffprobe'
 
 # ============================================================
 # Ejemplo de uso

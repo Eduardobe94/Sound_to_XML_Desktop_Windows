@@ -6,7 +6,7 @@ from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, 
                             QWidget, QLabel, QProgressBar, QTextEdit, QFileDialog,
                             QHBoxLayout, QFrame, QSplitter, QMenuBar, QMenu, QStatusBar,
-                            QDialog, QLineEdit)
+                            QDialog, QLineEdit, QInputDialog, QMessageBox)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QAction, QPalette, QColor, QFontDatabase
 from Sound_to_XML import MoodboardSimple
@@ -14,6 +14,8 @@ import whisper
 from openai import OpenAI, AsyncOpenAI
 import subprocess
 import platform
+from dotenv import load_dotenv
+import socket
 
 # Configuración del logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -35,14 +37,18 @@ class AsyncProcessor(QThread):
     finished_signal = pyqtSignal(tuple)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, audio_path):
+    def __init__(self, audio_path, output_folder=None):
         super().__init__()
         self.audio_path = audio_path
-        self.model = WhisperModelLoader.get_model()  # Usar el modelo ya cargado
+        self.output_folder = output_folder
+        self.model = WhisperModelLoader.get_model()
 
     async def process_audio(self):
         try:
-            moodboard = MoodboardSimple(whisper_model=self.model)  # Pasar el modelo
+            moodboard = MoodboardSimple(
+                audio_folder=self.output_folder,
+                whisper_model=self.model
+            )
             moodboard.print_status = lambda msg, emoji="ℹ️": self.progress_signal.emit(f"{emoji} {msg}")
             xml_path, srt_path = await moodboard.procesar_audio(self.audio_path)
             return xml_path, srt_path
@@ -177,6 +183,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Sound to XML")
         self.setMinimumSize(1200, 800)
         
+        # Establecer el icono de la ventana
+        icon_path = 'icon.ico' if platform.system() == 'Windows' else 'icon.icns'
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+        
         # Crear barra de estado
         self.status_bar = QStatusBar()
         self.status_bar.setStyleSheet("""
@@ -219,7 +230,55 @@ class MainWindow(QMainWindow):
         """)
         header_layout.addWidget(title)
         
-        # Botón de selección de archivo en el header
+        # Contenedor para botones
+        buttons_container = QFrame()
+        buttons_layout = QHBoxLayout(buttons_container)
+        buttons_layout.setSpacing(10)
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Botón de configuración
+        self.settings_button = QPushButton("⚙️")
+        self.settings_button.setStyleSheet("""
+            QPushButton {
+                padding: 8px 12px;
+                font-size: 16px;
+                background-color: #2b2b2b;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                min-width: 40px;
+            }
+            QPushButton:hover {
+                background-color: #3b3b3b;
+            }
+        """)
+        
+        # Menú de configuración
+        settings_menu = QMenu(self)
+        settings_menu.setStyleSheet("""
+            QMenu {
+                background-color: #1e1e1e;
+                color: white;
+                border: 1px solid #333333;
+                padding: 5px;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+            }
+            QMenu::item:selected {
+                background-color: #2979ff;
+                border-radius: 4px;
+            }
+        """)
+        
+        # Acción para configurar API Key
+        api_action = QAction('🔑  Configurar API Key', self)
+        settings_menu.addAction(api_action)
+        api_action.triggered.connect(self.configure_api_key)
+        
+        self.settings_button.setMenu(settings_menu)
+        
+        # Botón de selección de archivo
         self.select_button = QPushButton("Seleccionar Audio")
         self.select_button.setStyleSheet("""
             QPushButton {
@@ -239,7 +298,16 @@ class MainWindow(QMainWindow):
                 color: #757575;
             }
         """)
-        header_layout.addWidget(self.select_button, alignment=Qt.AlignmentFlag.AlignRight)
+        
+        # Añadir botones al contenedor
+        buttons_layout.addWidget(self.select_button)
+        buttons_layout.addWidget(self.settings_button)
+        
+        # Añadir contenedor de botones al header
+        header_layout.addWidget(buttons_container, alignment=Qt.AlignmentFlag.AlignRight)
+        
+        # Eliminar el menú superior
+        self.menuBar().setVisible(False)
         
         main_layout.addWidget(header)
 
@@ -392,6 +460,11 @@ class MainWindow(QMainWindow):
             self.add_log(f"\n❌ Error: {str(e)}")
 
     def start_processing(self):
+        """Verificar API key antes de procesar"""
+        if not os.getenv("OPENAI_API_KEY"):
+            # Usar la API key predeterminada si no hay una configurada
+            os.environ["OPENAI_API_KEY"] = "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"
+        
         self.select_button.setEnabled(False)
         self.progress_bar.show()
         self.progress_bar.setRange(0, 0)
@@ -412,7 +485,7 @@ class MainWindow(QMainWindow):
         self.add_log("Iniciando procesamiento...")
         self.status_bar.showMessage("Procesando archivo...")
 
-        self.processor = AsyncProcessor(self.audio_path)
+        self.processor = AsyncProcessor(self.audio_path, self.output_folder)
         self.processor.progress_signal.connect(self.update_progress)
         self.processor.finished_signal.connect(self.processing_finished)
         self.processor.error_signal.connect(self.processing_error)
@@ -500,15 +573,85 @@ class MainWindow(QMainWindow):
             subprocess.run(['xdg-open', path])
 
     def open_folder(self, path):
-        if platform.system() == 'Darwin':  # macOS
-            subprocess.run(['open', path])
-        elif platform.system() == 'Windows':  # Windows
-            os.startfile(path)
-        else:  # Linux
-            subprocess.run(['xdg-open', path])
+        """Abre la carpeta que contiene el archivo en el explorador."""
+        try:
+            # Obtener la carpeta del proyecto (dos niveles arriba de la carpeta xml)
+            project_folder = os.path.dirname(os.path.dirname(path))
+            
+            if platform.system() == 'Darwin':  # macOS
+                subprocess.run(['open', project_folder])
+            elif platform.system() == 'Windows':  # Windows
+                os.startfile(project_folder)
+            else:  # Linux
+                subprocess.run(['xdg-open', project_folder])
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"No se pudo abrir la carpeta: {str(e)}"
+            )
+
+    def load_api_key_from_env(self):
+        """Cargar API key desde el archivo .env silenciosamente"""
+        try:
+            load_dotenv(override=True)
+        except Exception:
+            pass  # Silenciosamente fallar si hay error
+
+    def configure_api_key(self):
+        """Diálogo para configurar la API Key"""
+        current_key = os.getenv("OPENAI_API_KEY", "")
+        api_key, ok = QInputDialog.getText(
+            self,
+            "Configuración OpenAI",
+            "API Key de OpenAI (dejar vacío para usar la predeterminada):",
+            QLineEdit.EchoMode.Password,
+            current_key
+        )
+        
+        if ok:
+            try:
+                # Si está vacío, usar la API key predeterminada
+                if not api_key.strip():
+                    api_key = "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"
+                
+                # Actualizar el archivo .env
+                env_path = os.path.join(os.path.dirname(__file__), '.env')
+                with open(env_path, 'w') as f:
+                    f.write(f'OPENAI_API_KEY={api_key}')
+                
+                # Actualizar la variable de entorno
+                os.environ["OPENAI_API_KEY"] = api_key
+                
+                QMessageBox.information(
+                    self,
+                    "Éxito",
+                    "API Key guardada correctamente"
+                )
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Error al guardar la API Key: {str(e)}"
+                )
 
 def main():
+    # Verificar si ya hay una instancia ejecutándose
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        # Intentar vincular al puerto 12345
+        sock.bind(('localhost', 12345))
+    except socket.error:
+        # Si no se puede vincular, significa que ya hay una instancia
+        print("La aplicación ya está en ejecución")
+        sys.exit(0)
+    
     app = QApplication(sys.argv)
+    
+    # Establecer el icono de la aplicación
+    icon_path = 'icon.ico' if platform.system() == 'Windows' else 'icon.icns'
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
     
     # Aplicar paleta oscura
     app.setPalette(DarkPalette())
@@ -519,7 +662,11 @@ def main():
     window = MainWindow()
     window.show()
     
-    sys.exit(app.exec())
+    # Liberar el socket al cerrar
+    try:
+        app.exec()
+    finally:
+        sock.close()
 
 if __name__ == "__main__":
     main() 
