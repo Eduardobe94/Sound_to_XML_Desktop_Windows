@@ -3,4 +3,6 @@ openai>=1.12.0
 openai-whisper==20231117
 python-dotenv==1.0.0
 rapidfuzz==3.6.1
-PyQt6==6.6.1 
+PyQt6==6.6.1
+numpy
+soundfile 
