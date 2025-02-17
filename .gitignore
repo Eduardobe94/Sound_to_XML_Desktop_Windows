@@ -67,4 +67,56 @@ $RECYCLE.BIN/
 *.msi
 *.msm
 *.msp
-*.lnk 
+*.lnk
+
+# Archivos temporales de macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Archivos de IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+.project
+.pydevproject
+
+# Archivos de log
+*.log
+
+# Archivos de instalador
+*.dmg
+*.exe
+*.msi
+
+# Archivos temporales de FFmpeg
+ffmpeg/*.exe
+ffmpeg/ffmpeg
+ffmpeg/ffprobe
+
+# Archivos de salida
+output/
+*.xml
+*.srt
+
+# Archivos de configuración local
+config.ini
+settings.json
+
+# Archivos de caché de Whisper
+*.npz
+*.tiktoken
+
+# Archivos temporales del sistema
+*.tmp
+*.bak
+*~ 
