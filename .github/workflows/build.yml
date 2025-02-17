@@ -23,6 +23,7 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
           pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install pydub openai-whisper numpy soundfile
           
       - name: Download FFmpeg
         run: |
@@ -39,12 +40,19 @@ jobs:
           
       - name: Build Windows executable
         run: |
-          python -m PyInstaller --debug --noconsole --icon=assets/icon.ico --add-data "assets;assets" --add-data "ffmpeg;ffmpeg" --name "Sound to XML Converter" Sound_to_XML.spec
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
+          dir
+          echo "Building with PyInstaller..."
+          python -m PyInstaller Sound_to_XML.spec --debug all
         
       - name: List directory contents
         run: |
+          echo "Dist directory:"
           dir dist
-          dir "dist\Sound to XML Converter"
+          echo "Build directory:"
+          dir build
           
       - name: Create installer
         run: |
@@ -72,22 +80,28 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
           pip install torch
+          pip install pydub openai-whisper numpy soundfile
           brew install ffmpeg
+          brew install create-dmg
           
       - name: Build macOS app
         run: |
-          set -x  # Habilitar modo debug
-          chmod +x build_macos.sh
-          ./build_macos.sh
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
+          ls -la
+          echo "Building app..."
+          python -m PyInstaller Sound_to_XML.spec --debug all
         
       - name: List directory contents
         run: |
+          echo "Dist directory:"
           ls -la dist
-          ls -la "dist/Sound to XML Converter.app"
+          echo "Build directory:"
+          ls -la build
           
       - name: Create DMG
         run: |
-          brew install create-dmg
           create-dmg \
             --volname "Sound to XML Converter" \
             --window-pos 200 120 \
