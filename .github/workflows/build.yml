@@ -41,15 +41,32 @@ jobs:
           Remove-Item -Path ffmpeg-master-latest-win64-gpl -Recurse -Force
           
       - name: Install NSIS
+        shell: pwsh
         run: |
           echo "Downloading NSIS..."
-          Invoke-WebRequest https://downloads.sourceforge.net/project/nsis/NSIS%203/3.08/nsis-3.08-setup.exe -OutFile nsis-setup.exe
-          echo "Installing NSIS..."
-          Start-Process -FilePath .\nsis-setup.exe -ArgumentList '/S' -Wait -NoNewWindow
-          echo "Waiting for installation..."
-          Start-Sleep -s 10
-          echo "Verifying installation..."
-          Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe'
+          curl.exe -L "https://netcologne.dl.sourceforge.net/project/nsis/NSIS%203/3.08/nsis-3.08-setup.exe" -o nsis-setup.exe
+          
+          if (!(Test-Path "nsis-setup.exe")) {
+            echo "Download failed, trying alternative URL..."
+            curl.exe -L "https://github.com/NSIS-Dev/nsis/releases/download/v3.08/nsis-3.08-setup.exe" -o nsis-setup.exe
+          }
+          
+          echo "Verifying download..."
+          if (Test-Path "nsis-setup.exe") {
+            echo "Installing NSIS..."
+            Start-Process -FilePath .\nsis-setup.exe -ArgumentList '/S' -Wait -NoNewWindow
+            echo "Waiting for installation..."
+            Start-Sleep -s 15
+            
+            echo "Verifying installation..."
+            if (Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe') {
+              echo "NSIS installed successfully"
+            } else {
+              throw "NSIS installation failed"
+            }
+          } else {
+            throw "Failed to download NSIS"
+          }
           
       - name: Build Windows executable
         run: |
