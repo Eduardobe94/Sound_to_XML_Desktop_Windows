@@ -1,21 +1,36 @@
 #!/bin/bash
 
 # Limpiar builds anteriores
-sudo rm -rf build dist
+rm -rf build dist
+rm -f "Sound to XML Converter.dmg"
 
-# Eliminar DMG anterior si existe
-sudo rm -f "Sound to XML Installer.dmg"
-sudo rm -f "rw.*.Sound to XML Installer.dmg"
-
-# Asegurar permisos
-chmod +x ffmpeg/*
+# Asegurar que FFmpeg está disponible
+which ffmpeg || brew install ffmpeg
 
 # Construir la aplicación
 pyinstaller Sound_to_XML.spec
 
-# Comprimir archivos grandes
-echo "Comprimiendo archivos binarios..."
-find "dist/Sound to XML Converter.app" -type f \( -name "*.so" -o -name "*.dylib" \) -exec upx --best {} \;
+# Crear el icono para macOS si no existe
+if [ ! -f "icon.icns" ]; then
+    # Convertir .ico a .icns si es necesario
+    sips -s format png assets/icon.ico --out icon.png
+    mkdir icon.iconset
+    sips -z 16 16   icon.png --out icon.iconset/icon_16x16.png
+    sips -z 32 32   icon.png --out icon.iconset/icon_16x16@2x.png
+    sips -z 32 32   icon.png --out icon.iconset/icon_32x32.png
+    sips -z 64 64   icon.png --out icon.iconset/icon_32x32@2x.png
+    sips -z 128 128 icon.png --out icon.iconset/icon_128x128.png
+    sips -z 256 256 icon.png --out icon.iconset/icon_128x128@2x.png
+    sips -z 256 256 icon.png --out icon.iconset/icon_256x256.png
+    sips -z 512 512 icon.png --out icon.iconset/icon_256x256@2x.png
+    sips -z 512 512 icon.png --out icon.iconset/icon_512x512.png
+    sips -z 1024 1024 icon.png --out icon.iconset/icon_512x512@2x.png
+    iconutil -c icns icon.iconset
+    rm -rf icon.iconset icon.png
+fi
+
+# Limpiar archivos temporales
+rm -rf build
 
 # Crear el DMG
 create-dmg \
@@ -31,4 +46,4 @@ create-dmg \
   "dist/Sound to XML Converter.app" || true
 
 # Limpiar archivos temporales
-sudo rm -f "rw.*.Sound to XML Installer.dmg" 
+rm -f "rw.*.Sound to XML Installer.dmg" 
