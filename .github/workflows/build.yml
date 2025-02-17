@@ -27,11 +27,18 @@ jobs:
           
       - name: Download FFmpeg
         run: |
+          Remove-Item -Path ffmpeg -Recurse -Force -ErrorAction SilentlyContinue
           mkdir ffmpeg
+          echo "Downloading FFmpeg..."
           Invoke-WebRequest https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip -OutFile ffmpeg.zip
+          echo "Extracting FFmpeg..."
           Expand-Archive ffmpeg.zip -DestinationPath .
-          Move-Item ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe ffmpeg\
-          Move-Item ffmpeg-master-latest-win64-gpl\bin\ffprobe.exe ffmpeg\
+          echo "Moving FFmpeg files..."
+          Move-Item -Force ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe ffmpeg\
+          Move-Item -Force ffmpeg-master-latest-win64-gpl\bin\ffprobe.exe ffmpeg\
+          echo "Cleaning up..."
+          Remove-Item -Path ffmpeg.zip -Force
+          Remove-Item -Path ffmpeg-master-latest-win64-gpl -Recurse -Force
           
       - name: Install NSIS
         run: |
