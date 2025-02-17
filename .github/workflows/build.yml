@@ -42,8 +42,14 @@ jobs:
           
       - name: Install NSIS
         run: |
-          Invoke-WebRequest https://nsis.sourceforge.io/mediawiki/images/c/c9/Nsis-3.08-setup.exe -OutFile nsis-setup.exe
-          Start-Process -FilePath .\nsis-setup.exe -ArgumentList '/S' -Wait
+          echo "Downloading NSIS..."
+          Invoke-WebRequest https://downloads.sourceforge.net/project/nsis/NSIS%203/3.08/nsis-3.08-setup.exe -OutFile nsis-setup.exe
+          echo "Installing NSIS..."
+          Start-Process -FilePath .\nsis-setup.exe -ArgumentList '/S' -Wait -NoNewWindow
+          echo "Waiting for installation..."
+          Start-Sleep -s 10
+          echo "Verifying installation..."
+          Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe'
           
       - name: Build Windows executable
         run: |
