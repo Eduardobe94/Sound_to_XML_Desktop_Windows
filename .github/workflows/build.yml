@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -101,6 +104,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: "Sound to XML Installer.exe"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: "Sound to XML Converter v${{ github.ref_name }}"
+          body: "Release version ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          files: |
+            dist/*.exe
+            "Sound to XML Installer.exe"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
