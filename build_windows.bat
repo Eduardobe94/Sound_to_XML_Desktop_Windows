@@ -13,6 +13,11 @@ pip install --upgrade pip
 pip install PyQt6==6.4.0
 pip install PyQt6-sip==13.4.0
 pip install PyQt6-Qt6==6.4.0
+pip install openai-whisper==1.0.0
+
+echo Localizando archivos de Whisper...
+for /f "tokens=*" %%i in ('python -c "import whisper; import os; print(os.path.dirname(whisper.__file__))"') do set WHISPER_PATH=%%i
+echo Whisper path: %WHISPER_PATH%
 
 echo Verificando archivos necesarios...
 if not exist "assets\icon.ico" (
@@ -31,6 +36,7 @@ if not exist "main_gui.py" (
 echo Copiando recursos...
 xcopy /y /e /i assets dist\assets
 xcopy /y /e /i ffmpeg dist\ffmpeg
+xcopy /y /e /i "%WHISPER_PATH%\assets" "dist\whisper_assets"
 
 echo Construyendo la aplicación...
 python -m PyInstaller --clean ^
@@ -38,6 +44,7 @@ python -m PyInstaller --clean ^
     --icon="assets\icon.ico" ^
     --add-data="assets;assets" ^
     --add-data="ffmpeg;ffmpeg" ^
+    --add-data="%WHISPER_PATH%\assets;whisper\assets" ^
     --hidden-import=PyQt6 ^
     --hidden-import=PyQt6.QtCore ^
     --hidden-import=PyQt6.QtGui ^
@@ -47,6 +54,7 @@ python -m PyInstaller --clean ^
     --hidden-import=openai-whisper ^
     --hidden-import=numpy ^
     --hidden-import=soundfile ^
+    --collect-all whisper ^
     --collect-all PyQt6 ^
     --name="Sound to XML Converter" ^
     main_gui.py
